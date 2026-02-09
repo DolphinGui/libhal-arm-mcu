@@ -16,10 +16,7 @@ cmake_minimum_required(VERSION 3.15)
 
 if(DEFINED ENV{PICO_SDK_PATH})
 set(PICO_CXX_ENABLE_EXCEPTIONS 1)
-set(CMAKE_ASM_FLAGS_INIT "-mcpu=cortex-m33 -mfloat-abi=soft")
-set(PICO_NO_PICOTOOL 1)
-list(APPEND PICO_BOARD_HEADER_DIRS ${CMAKE_SOURCE_DIR}/src/rp/boards)
-set(PICO_BOARD rp2350b_w25q080)
+set(CMAKE_ASM_FLAGS_INIT "-mcpu=cortex-m33 -mfloat-abi=hard")
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 endif()
 
@@ -131,6 +128,7 @@ set(
 )
 
 else()
+
 set(source_list
   src/rp/gpio.cpp
   src/rp/serial.cpp
@@ -145,19 +143,58 @@ set(source_list
 )
 
 pico_sdk_init()
-
 set(pico_dep 
-  hardware_gpio_headers 
-  pico_time_headers 
-  pico_stdio_headers 
-  hardware_sync_headers
-  hardware_i2c_headers
-  hardware_pwm_headers
-  hardware_adc_headers
-  hardware_spi_headers
-  hardware_uart_headers
-  hardware_timer_headers
+  hardware_gpio 
+  pico_time 
+  pico_stdio 
+  hardware_sync
+  hardware_i2c
+  hardware_pwm
+  hardware_adc
+  hardware_spi
+  hardware_uart
+  hardware_timer
+  pico_standard_link
+  pico_crt0
+  pico_newlib_interface
+  pico_runtime
 )
+
+# this required copious amounts of pain to try to extract
+get_target_property(LDSCRIPT_DIR pico_standard_link RP_PICO_LINK_SCRIPT_DIR)
+install(FILES ${CMAKE_BINARY_DIR}/pico_flash_region.ld DESTINATION linker_scripts)
+install(FILES ${LDSCRIPT_DIR}/memmap_${PICO_DEFAULT_BINARY_TYPE}.ld DESTINATION linker_scripts RENAME rpdefault.ld)
+
+if(DEFINED NOFLASH)
+  target_compile_definitions()
+endif()
+
+if(ONLY_INCLUDE_PICO_HEADERS)
+list(TRANSFORM pico_dep APPEND _headers)
+endif()
+
+libhal_test_and_make_library(
+  LIBRARY_NAME rp-stdio-usb
+  SOURCES
+  src/rp/stdio/usb.cpp
+  TEST_SOURCES
+  PACKAGES
+  LINK_LIBRARIES
+  pico_stdio_usb
+  pico_newlib_interface
+)
+
+foreach(iotype uart;rtt;semihosting)
+libhal_test_and_make_library(
+  LIBRARY_NAME rp-stdio-${iotype}
+  SOURCES
+  src/rp/stdio/${iotype}.cpp
+  TEST_SOURCES
+  PACKAGES
+  LINK_LIBRARIES
+  pico_stdio_${iotype}
+)
+endforeach()
 
 endif()
 
@@ -183,4 +220,3 @@ libhal_test_and_make_library(
   nonstd::scope-lite
   ${pico_dep}
 )
-

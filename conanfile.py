@@ -45,7 +45,10 @@ class libhal_arm_mcu_conan(ConanFile):
         "use_picolibc": [True, False],
         "platform": ["ANY"],
         "use_default_linker_script": [True, False],
-        "variant": [None, "ANY"]
+        "variant": [None, "ANY"],
+        "board": [None, "ANY"],
+        "rp_header_only": [True, False],
+        "rp_link_type": [None, "no_flash", "blocked_ram", "copy_to_ram"]
     }
 
     default_options = {
@@ -53,11 +56,14 @@ class libhal_arm_mcu_conan(ConanFile):
         "use_picolibc": True,
         "platform": "ANY",
         "use_default_linker_script": True,
-        "variant": None
+        "variant": None,
+        "board": None,
+        "rp_header_only": False,
+        "rp_link_type": None,
     }
 
     def requirements(self):
-        self.requires("libhal/[>4.17.0 <=4.18.0]", transitive_headers=True)
+        self.requires("libhal/[^4.18.0]", transitive_headers=True)
         self.requires("libhal-util/[^5.7.0]", transitive_headers=True)
         self.requires("ring-span-lite/[^0.7.0]", transitive_headers=True)
         self.requires("scope-lite/0.2.0")
@@ -73,19 +79,6 @@ class libhal_arm_mcu_conan(ConanFile):
             self.requires("picosdk/2.2.0")
             self.tool_requires("pioasm/2.2.0")
 
-    def handle_stm32f1_linker_scripts(self):
-        linker_script_name = list(str(self.options.platform))
-        # Replace the MCU number and pin count number with 'x' (don't care)
-        # to map to the linker script
-        linker_script_name[8] = 'x'
-        linker_script_name[9] = 'x'
-        linker_script_name = "".join(linker_script_name)
-
-        self.cpp_info.exelinkflags = [
-            "-L" + os.path.join(self.package_folder, "linker_scripts"),
-            "-T" + os.path.join("libhal-stm32f1", linker_script_name + ".ld"),
-        ]
-
     def _macro(self, string):
         return string.upper().replace("-", "_")
 
@@ -94,7 +87,9 @@ class libhal_arm_mcu_conan(ConanFile):
         virt.generate()
         tc = CMakeToolchain(self)
         if str(self.options.platform).startswith("rp2"):
-            tc.cache_variables["DO_NOT_BUILD_BOOT_HAL"] = True
+            tc.cache_variables["PICO_BOARD"] = str(self.options.board)
+            tc.cache_variables["ONLY_INCLUDE_PICO_HEADERS"] =  self.options.rp_header_only
+            tc.cache_variables["PICO_DEFAULT_BINARY_TYPE"] = self.options.rp_link_type or "default"
         if self.options.variant:
             tc.preprocessor_definitions["LIBHAL_VARIANT_" + self._macro(str(self.options.variant))] = "1"
         tc.preprocessor_definitions["LIBHAL_PLATFORM_" + self._macro(str(self.options.platform))] = "1"
@@ -104,6 +99,8 @@ class libhal_arm_mcu_conan(ConanFile):
 
     def validate(self):
         if str(self.options.platform).startswith("rp2"):
+            if self.options.board is None:
+                raise ConanInvalidConfiguration("Must specify a board for picosdk")
             if "rp2350" in str(self.options.platform):
                 if not self.options.variant:
                     raise ConanInvalidConfiguration("RP2350 variant not specified")
@@ -112,31 +109,41 @@ class libhal_arm_mcu_conan(ConanFile):
         super().validate()
 
     def package_info(self):
-        self.cpp_info.libs = ["libhal-arm-mcu"]
-        self.cpp_info.set_property("cmake_target_name", "libhal::arm-mcu")
-        self.cpp_info.set_property("cmake_target_aliases", [
+        core = self.cpp_info.components["arm-mcu"]
+        core.libs = ["libhal-arm-mcu"]
+        core.set_property("cmake_target_name", "libhal::arm-mcu")
+        core.set_property("cmake_target_aliases", [
             "libhal::lpc40",
             "libhal::stm32f1",
             "libhal::stm32f4",
             "libhal::rp2350"
         ])
-        self.cpp_info.exelinkflags = []
+        core.exelinkflags = []
+        core.requires = ["libhal::libhal","libhal-util::libhal-util", 
+        "ring-span-lite::ring-span-lite", 
+        "scope-lite::scope-lite"]
 
         platform = str(self.options.platform)
         self.buildenv_info.define("LIBHAL_PLATFORM", platform)
         self.buildenv_info.define("LIBHAL_PLATFORM_LIBRARY", "arm-mcu")
         if str(self.options.platform).startswith("rp2"):
+            core.requires += ["picosdk::picosdk"]
             defines = []
             if self.options.variant:
                 defines.append("LIBHAL_VARIANT_" + self._macro(str(self.options.variant)) + "=1")
             defines.append("LIBHAL_PLATFORM_" + self._macro(str(self.options.platform)) + "=1")
-            self.cpp_info.defines = defines
+            core.defines = defines
+            for iotype in "usb", "uart", "rtt", "semihosting":
+              self.cpp_info.components[f"rp-stdio-{iotype}"].set_property("cmake_target_name", f"libhal::rp-stdio-{iotype}")
+              self.cpp_info.components[f"rp-stdio-{iotype}"].libs = [f"rp-stdio-{iotype}"]
+              self.cpp_info.components[f"rp-stdio-{iotype}"].requires = ["picosdk::picosdk"]
 
         if (self.settings.os == "baremetal" and
                 self.options.use_default_linker_script):
+            core.requires += ["libhal-exceptions::libhal-exceptions", "prebuilt-picolibc::prebuilt-picolibc"]
             # If the platform matches the linker script, just use that linker
             # script
-            self.cpp_info.exelinkflags = [
+            core.exelinkflags = [
                 "-L" + os.path.join(self.package_folder, "linker_scripts")]
 
             full_linker_path = os.path.join(
@@ -144,7 +151,7 @@ class libhal_arm_mcu_conan(ConanFile):
             # if the file exists, then we should use it as the linker
             if os.path.isfile(full_linker_path):
                 self.output.info(f"linker file '{full_linker_path}' found!")
-                self.cpp_info.exelinkflags.append("-T" + platform + ".ld")
+                core.exelinkflags.append("-T" + platform + ".ld")
 
             # if there is no match, then the linker script could be a pattern
             # based on the name of the platform
@@ -166,7 +173,9 @@ class libhal_arm_mcu_conan(ConanFile):
             linker_script_name[8] = 'x'
             linker_script_name[9] = 'x'
             linker_script_name = "".join(linker_script_name)
-            self.cpp_info.exelinkflags.append(
+            self.cpp_info.components["arm-mcu"].exelinkflags.append(
                 "-T" + linker_script_name + ".ld")
-            return
+        elif platform.startswith("rp"):
+            self.cpp_info.components["arm-mcu"].exelinkflags.append(
+                "-Trpdefault.ld")
         # Add additional script searching queries here

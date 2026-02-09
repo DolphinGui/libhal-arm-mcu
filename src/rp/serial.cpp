@@ -7,6 +7,7 @@
 #include <libhal/units.hpp>
 #include <pico/stdio.h>
 #include <pico/time.h>
+#include "stdio_init.hpp"
 
 namespace {
 auto get_uart(hal::u8 bus)
@@ -25,7 +26,7 @@ auto get_uart(hal::u8 bus)
 namespace hal::rp::inline v4 {
 stdio_serial::stdio_serial()
 {
-  stdio_init_all();
+  internal::init_stdio();
 }
 
 void stdio_serial::driver_configure(settings const&)

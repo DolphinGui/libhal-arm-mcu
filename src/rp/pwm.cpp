@@ -6,6 +6,7 @@
 #include <libhal/error.hpp>
 #include <libhal/units.hpp>
 #include <limits>
+#include <stdio.h>
 
 /*
 TODO: Specify SYS_CLK_HZ in a board header so that pico actually knows what
