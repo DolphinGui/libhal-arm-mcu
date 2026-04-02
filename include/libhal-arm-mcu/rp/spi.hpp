@@ -1,7 +1,10 @@
 #pragma once
 
 #include "rp.hpp"
+#include <libhal/initializers.hpp>
+#include <libhal/lock.hpp>
 #include <libhal/spi.hpp>
+#include <libhal/steady_clock.hpp>
 
 namespace hal::rp {
 constexpr u8 bus_from_tx_pin(u8 tx)
@@ -38,29 +41,78 @@ private:
 };
 }  // namespace v4
 namespace v5 {
+struct spi_channel;
+template<typename Lock = void>
+struct spi_bus;
+template<>
+struct spi_bus<void>
+{
+  spi_bus(bus_param auto bus,
+          pin_param auto copi,
+          pin_param auto cipo,
+          pin_param auto sck)
+    : spi_bus(bus(), copi(), cipo(), sck())
+  {
+    static_assert(bus() == bus_from_tx_pin(copi()),
+                  "Bus parameter does not match pins");
+    static_assert(cipo() % 4 == 0, "SPI RX pin is invalid");
+    static_assert(sck() % 4 == 2, "SPI SCK pin is invalid");
+    static_assert(copi() % 4 == 3, "SPI CS pin is invalid");
+  }
+  ~spi_bus();
+
+  /* Acquires a device assciated with a certain pin. Due to usage of software
+   * CS, a steady clock is necessary to wait the prerequesite time since SPI
+   * Peripheral unsets itself a little early */
+  spi_channel acquire_device(pin_param auto pin,
+                             hal::steady_clock&,
+                             hal::v5::spi_channel::settings const& settings);
+
+protected:
+  spi_channel acquire_device(u8 pin,
+                             hal::pollable_lock* lock,
+                             hal::steady_clock&,
+                             hal::v5::spi_channel::settings const& settings);
+  spi_bus(u8 bus, u8 tx, u8 rx, u8 sck);
+  u8 m_bus, m_tx, m_rx, m_sck;
+};
+
+template<hal::lockable Lock>
+struct spi_bus<Lock> : spi_bus<void>
+{
+  template<typename... Ts>
+  spi_bus(bus_param auto bus,
+          pin_param auto copi,
+          pin_param auto cipo,
+          pin_param auto sck,
+          Ts... args)
+    : spi_bus<void>(bus, copi, cipo, sck)
+    , m_lock(std::forward<Ts>(args)...)
+  {
+  }
+
+  spi_channel acquire_device(pin_param auto pin,
+                             hal::steady_clock&,
+                             hal::v5::spi_channel::settings const& settings);
+
+  Lock m_lock;
+};
+
 /*
 RP chips suppport 16 bit transfers. It may be worthwhile to add an option
 to transfer 16 bits as a time. TODO fix to add spi channel manager
 */
-struct spi final : public hal::spi_channel
+struct spi_channel final : public hal::spi_channel
 {
-  // Yes the spi pins can be completely seperate pins
-  spi(pin_param auto copi,
-      pin_param auto cipo,
-      pin_param auto sck,
-      pin_param auto cs,
-      spi::settings const& options = {})
-    : spi(bus_from_tx_pin(copi()), copi(), cipo(), sck(), cs(), options)
-  {
-    static_assert(cipo() % 4 == 0, "SPI RX pin is invalid");
-    // CS is a normal gpio
-    static_assert(sck() % 4 == 2, "SPI SCK pin is invalid");
-    static_assert(copi() % 4 == 3, "SPI CS pin is invalid");
-  }
-  ~spi() override;
+  friend spi_bus<void>;
+  ~spi_channel() override;
 
 private:
-  spi(u8 bus, u8 copi, u8 cipo, u8 sck, u8 cs, spi::settings const&);
+  spi_channel(u8 bus,
+              u8 cs,
+              hal::pollable_lock*,
+              hal::steady_clock*,
+              settings const&);
   void driver_configure(settings const&) override;
   u32 driver_clock_rate() override;
   void driver_chip_select(bool p_select) override;
@@ -68,8 +120,35 @@ private:
   void driver_transfer(std::span<byte const> out,
                        std::span<byte> in,
                        byte) override;
-
-  u8 m_bus, m_tx, m_rx, m_sck, m_cs;
+  hal::steady_clock* m_clk;
+  hal::pollable_lock* m_lock;
+  u8 m_bus, m_cs;
 };
+
+inline spi_channel spi_bus<void>::acquire_device(
+  pin_param auto pin,
+  hal::steady_clock& clk,
+  hal::v5::spi_channel::settings const& s)
+{
+  return acquire_device(pin(), nullptr, clk, s);
+}
+template<hal::lockable Lock>
+spi_channel spi_bus<Lock>::acquire_device(
+  pin_param auto pin,
+  hal::steady_clock& clk,
+  hal::v5::spi_channel::settings const& s)
+{
+  return acquire_device(pin(), &m_lock, clk, s);
+}
+
+inline spi_channel spi_bus<void>::acquire_device(
+  u8 pin,
+  hal::pollable_lock* lock,
+  hal::steady_clock& clk,
+  hal::v5::spi_channel::settings const& settings)
+{
+  return { m_bus, pin, lock, &clk, settings };
+}
+
 }  // namespace v5
 }  // namespace hal::rp

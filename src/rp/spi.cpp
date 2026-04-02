@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <hardware/gpio.h>
 #include <hardware/spi.h>
+#include <libhal-util/steady_clock.hpp>
 #include <libhal/error.hpp>
+#include <pico/time.h>
 
 namespace {
-auto spi_bus(hal::u8 busnum)
+auto get_bus(hal::u8 busnum)
 {
   switch (busnum) {
     case 0:
@@ -39,8 +41,8 @@ void spi::driver_configure(spi::settings const& s)
   spi_cpol_t polarity = s.clock_polarity ? SPI_CPOL_1 : SPI_CPOL_0;
   spi_cpha_t phase = s.clock_phase ? SPI_CPHA_1 : SPI_CPHA_0;
 
-  spi_init(spi_bus(m_bus), static_cast<unsigned int>(s.clock_rate));
-  spi_set_format(spi_bus(m_bus), 8, polarity, phase, SPI_MSB_FIRST);
+  spi_init(get_bus(m_bus), static_cast<unsigned int>(s.clock_rate));
+  spi_set_format(get_bus(m_bus), 8, polarity, phase, SPI_MSB_FIRST);
 }
 
 void spi::driver_transfer(std::span<byte const> out,
@@ -50,14 +52,18 @@ void spi::driver_transfer(std::span<byte const> out,
   auto out_size = out.size_bytes();
   auto in_size = in.size_bytes();
   auto size = std::min(out_size, in_size);
-  spi_write_read_blocking(spi_bus(m_bus), out.data(), in.data(), size);
+  spi_write_read_blocking(get_bus(m_bus), out.data(), in.data(), size);
   if (out_size > in_size) {
     spi_write_blocking(
-      spi_bus(m_bus), out.data() + in_size, out_size - in_size);
+      get_bus(m_bus), out.data() + in_size, out_size - in_size);
   } else if (in_size > out_size) {
     spi_read_blocking(
-      spi_bus(m_bus), filler, in.data() + out_size, in_size - out_size);
+      get_bus(m_bus), filler, in.data() + out_size, in_size - out_size);
   }
+  // Does this wreck performance? probably
+  // Is this a bad idea? probably
+  // Is it necessary? Absolutely. See below for implementation details
+  sleep_us(10);
 }
 
 spi::~spi()
@@ -65,29 +71,48 @@ spi::~spi()
   gpio_deinit(m_tx);
   gpio_deinit(m_rx);
   gpio_deinit(m_sck);
-  spi_deinit(spi_bus(m_bus));
+  spi_deinit(get_bus(m_bus));
 }
 
 }  // namespace v4
 
 namespace v5 {
-spi::spi(u8 bus, u8 tx, u8 rx, u8 sck, u8 cs, spi::settings const& s)  // NOLINT
+
+spi_bus<void>::spi_bus(u8 bus, u8 tx, u8 rx, u8 sck)  // NOLINT
   : m_bus(bus)
   , m_tx(tx)
   , m_rx(rx)
   , m_sck(sck)
-  , m_cs(cs)
 {
-  driver_configure(s);
   gpio_set_function(tx, GPIO_FUNC_SPI);
   gpio_set_function(rx, GPIO_FUNC_SPI);
   gpio_set_function(sck, GPIO_FUNC_SPI);
-  gpio_init(cs);
-  gpio_set_dir(cs, GPIO_OUT);
-  gpio_put(cs, true);
 }
 
-void spi::driver_configure(spi::settings const& s)
+spi_bus<void>::~spi_bus()
+{
+  gpio_deinit(m_tx);
+  gpio_deinit(m_rx);
+  gpio_deinit(m_sck);
+  spi_deinit(get_bus(m_bus));
+}
+
+spi_channel::spi_channel(u8 bus,  // NOLINT
+                         u8 cs,
+                         hal::pollable_lock* lock,
+                         hal::steady_clock* clock,
+                         settings const& s)
+  : m_clk(clock)
+  , m_lock(lock)
+  , m_bus(bus)
+  , m_cs(cs)
+{
+  gpio_init(cs);
+  gpio_set_dir(cs, GPIO_OUT);
+  driver_configure(s);
+}
+
+void spi_channel::driver_configure(spi_channel::settings const& s)
 {
   spi_cpol_t polarity = SPI_CPOL_0;
   spi_cpha_t phase = SPI_CPHA_0;
@@ -111,52 +136,58 @@ void spi::driver_configure(spi::settings const& s)
     default:
       break;
   }
-  spi_init(spi_bus(m_bus), s.clock_rate);
-  spi_set_format(spi_bus(m_bus), 8, polarity, phase, SPI_MSB_FIRST);
+  spi_init(get_bus(m_bus), s.clock_rate);
+  spi_set_format(get_bus(m_bus), 8, polarity, phase, SPI_MSB_FIRST);
 }
 
-u32 spi::driver_clock_rate()
+u32 spi_channel::driver_clock_rate()
 {
-  return spi_get_baudrate(spi_bus(m_bus));
+  return spi_get_baudrate(get_bus(m_bus));
 }
 
-void spi::driver_chip_select(bool sel)
+void spi_channel::driver_chip_select(bool sel)
 {
-  // The examples in
-  // https://github.com/raspberrypi/pico-examples/tree/master/spi seem to add a
-  // mysterious nop sequence before and after the assertion. Apparently the
-  // engineer who wrote this 15 years ago doesn't remember
-  // (https://forums.raspberrypi.com/viewtopic.php?t=332078) so its necessity is
-  // really unclear. In any case, there's a nonzero chance just the overhead of
-  // calling a function will mask this bug. If SPI seems a bit flaky, then
-  // consider adding asm nops here.
-  gpio_put(m_cs, !sel);
+  // https://github.com/raspberrypi/pico-examples/tree/master/spi
+  // The pico examples add NOPs explicitly, which seems to be to guard against
+  // the CS deasserting early. We wait explicitly, so that won't be necessary
+  using namespace std::chrono_literals;
+  if (sel) {
+    if (m_lock)
+      m_lock->lock();
+    gpio_put(m_cs, false);
+  } else if (!sel) {
+    // Arm Primecell Synchronous Serial Port :tm: unsets the busy bit early,
+    // necessitating this
+    auto freq = this->driver_clock_rate();
+    auto sleep_time = std::chrono::duration<u32, std::micro>(1'000'000 / freq);
+    hal::delay(*m_clk, sleep_time);
+    gpio_put(m_cs, true);
+
+    if (m_lock)
+      m_lock->unlock();
+  }
 }
 
-void spi::driver_transfer(std::span<byte const> out,
-                          std::span<byte> in,
-                          byte filler)
+void spi_channel::driver_transfer(std::span<byte const> out,
+                                  std::span<byte> in,
+                                  byte filler)
 {
   auto out_size = out.size_bytes();
   auto in_size = in.size_bytes();
   auto size = std::min(out_size, in_size);
-  spi_write_read_blocking(spi_bus(m_bus), out.data(), in.data(), size);
+  spi_write_read_blocking(get_bus(m_bus), out.data(), in.data(), size);
   if (out_size > in_size) {
     spi_write_blocking(
-      spi_bus(m_bus), out.data() + in_size, out_size - in_size);
+      get_bus(m_bus), out.data() + in_size, out_size - in_size);
   } else if (in_size > out_size) {
     spi_read_blocking(
-      spi_bus(m_bus), filler, in.data() + out_size, in_size - out_size);
+      get_bus(m_bus), filler, in.data() + out_size, in_size - out_size);
   }
 }
 
-spi::~spi()
+spi_channel::~spi_channel()
 {
-  gpio_deinit(m_tx);
-  gpio_deinit(m_rx);
-  gpio_deinit(m_sck);
   gpio_deinit(m_cs);
-  spi_deinit(spi_bus(m_bus));
 }
 }  // namespace v5
 }  // namespace hal::rp
