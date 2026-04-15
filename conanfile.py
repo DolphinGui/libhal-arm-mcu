@@ -18,9 +18,8 @@ from conan import ConanFile
 from conan.tools.cmake import CMakeDeps, CMakeToolchain
 from conan.tools.env import VirtualBuildEnv
 from conan.errors import ConanInvalidConfiguration
+from conan.tools.files import copy
 from pathlib import Path
-import os
-
 
 required_conan_version = ">=2.0.14"
 
@@ -50,6 +49,10 @@ class libhal_arm_mcu_conan(ConanFile):
         "board": [None, "ANY"],
         "replace_std_terminate": [True, False],
         "use_semihosting": [True, False],
+        "flash_size": [None, "ANY"],
+        "flash_clkdiv": [None, "ANY"],
+        "rp_revision": [None, "ANY"],
+        "use_w25q_flash": [True, False],
     }
     default_options = {
         "platform": "ANY",
@@ -60,7 +63,12 @@ class libhal_arm_mcu_conan(ConanFile):
         "use_semihosting": True,
         "variant": None,
         "board": None,
+        "flash_size": None,
+        "flash_clkdiv": None,
+        "rp_revision": None,
+        "use_w25q_flash": False,
     }
+
     options_description = {
         "platform": "Specifies which platform to provide binaries and build information for",
         "use_libhal_exceptions": "Reserved for backwards compatibility. This option is currently unused and will become functional when libhal-exceptions is feature complete.",
@@ -94,9 +102,6 @@ class libhal_arm_mcu_conan(ConanFile):
         if str(self.options.platform).startswith("rp2"):
             self.requires("picosdk/2.2.1-alpha")
             self.tool_requires("pioasm/2.2.0")
-            if self.options.board.value.startswith("libhal_"):
-                board = self.options.board.value.removeprefix('libhal_').replace('_', '-')
-                self.requires(f"rp-board-header-{board}/latest", visible=True)
 
     def handle_stm32f1_linker_scripts(self):
         linker_script_name = list(str(self.options.platform))
@@ -123,6 +128,8 @@ class libhal_arm_mcu_conan(ConanFile):
             tc.preprocessor_definitions["PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS"] = "0"
             if self.options.board:
                 tc.cache_variables["PICO_BOARD"] = str(self.options.board)
+                tc.cache_variables["PICO_BOARD_HEADER_DIRS"] = str(self.build_folder)
+                self.generate_rp_header()
         if self.options.variant:
             tc.preprocessor_definitions["LIBHAL_VARIANT_" + self._macro(str(self.options.variant))] = "1"
         tc.preprocessor_definitions["LIBHAL_PLATFORM_" + self._macro(str(self.options.platform))] = "1"
@@ -142,27 +149,49 @@ class libhal_arm_mcu_conan(ConanFile):
                 if self.options.variant not in ["rp2350a", "rp2350b"]:
                     raise ConanInvalidConfiguration("Invalid RP2350 variant specified")
                 if not self.options.board:
-                    raise ConanInvalidConfiguration("Board must be specified during build")
+                    raise ConanInvalidConfiguration(
+                        "Board must be specified during build"
+                    )
+                if not self.options.flash_size:
+                    raise ConanInvalidConfiguration("Flash size must be set")
+                if not str(self.options.flash_clkdiv).isnumeric():
+                    raise ConanInvalidConfiguration(
+                        "Flash clock divider is invalid value"
+                    )
+                if self.options.rp_revision.value not in ["a1", "a2"]:
+                    raise ConanInvalidConfiguration("RP revision is invalid")
         super().validate()
+
+    def package(self):
+        copy(
+            self,
+            f"{self.options.board.value}.h",
+            dst=Path(self.package_folder).joinpath("include", "picosdk-board-defs"),
+            src=self.build_folder,
+        )
+        super().package()
 
     def package_info(self):
         self.cpp_info.libs = ["libhal-arm-mcu"]
         self.cpp_info.set_property("cmake_target_name", "libhal::arm-mcu")
-        self.cpp_info.set_property("cmake_target_aliases", [
-            "libhal::lpc40",
-            "libhal::stm32f1",
-            "libhal::stm32f4",
-            "libhal::rp2350"
-        ])
+        self.cpp_info.set_property(
+            "cmake_target_aliases",
+            ["libhal::lpc40", "libhal::stm32f1", "libhal::stm32f4", "libhal::rp2350"],
+        )
 
         PLATFORM = str(self.options.platform)
         self.buildenv_info.define("LIBHAL_PLATFORM", PLATFORM)
         self.buildenv_info.define("LIBHAL_PLATFORM_LIBRARY", "arm-mcu")
+        self.buildenv_info.define("PICO_BOARD_HEADER_DIRS", str(Path(self.package_folder, "include", "picosdk-board-defs")))
         if str(self.options.platform).startswith("rp2"):
             defines = []
             if self.options.variant:
-                defines.append("LIBHAL_VARIANT_" + self._macro(str(self.options.variant)) + "=1")
-            defines.append("LIBHAL_PLATFORM_" + self._macro(str(self.options.platform)) + "=1")
+                defines.append(
+                    "LIBHAL_VARIANT_" + self._macro(str(self.options.variant)) + "=1"
+                )
+            defines.append(
+                "LIBHAL_PLATFORM_" + self._macro(str(self.options.platform)) + "=1"
+            )
             defines.append("PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS=0")
             self.cpp_info.defines = defines
 
@@ -250,10 +279,42 @@ class libhal_arm_mcu_conan(ConanFile):
             linker_script_name = list(str(self.options.platform))
             # Replace the MCU number and pin count number with 'x' (don't care)
             # to map to the linker script
-            linker_script_name[8] = 'x'
-            linker_script_name[9] = 'x'
+            linker_script_name[8] = "x"
+            linker_script_name[9] = "x"
             linker_script_name = "".join(linker_script_name)
-            self.cpp_info.exelinkflags.append(
-                "-T" + linker_script_name + ".ld")
+            self.cpp_info.exelinkflags.append("-T" + linker_script_name + ".ld")
             return
         # Add additional script searching queries here
+
+    def generate_rp_header(self):
+        platform = str(self.options.platform.value)
+        pico_board = self.options.board.value
+        a2 = "1" if self.options.rp_revision.value == "a2" else "0"
+        if platform.startswith("rp235"):
+            if self.options.variant == "rp2350a":
+                r2350a = "1"
+            else:
+                r2350a = "0"
+        file = f"""#ifndef _{pico_board}_h
+                #define _{pico_board}_h
+                pico_board_cmake_set(PICO_PLATFORM, {platform})
+                #define PICO_RP2350A {r2350a}
+                #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 {"1" if self.options.use_w25q_flash else "0"}
+
+                #ifndef PICO_FLASH_SPI_CLKDIV
+                #define PICO_FLASH_SPI_CLKDIV {self.options.flash_clkdiv}
+                #endif
+
+                pico_board_cmake_set_default(PICO_FLASH_SIZE_BYTES, {self.options.flash_size})
+                #ifndef PICO_FLASH_SIZE_BYTES
+                #define PICO_FLASH_SIZE_BYTES {self.options.flash_size}
+                #endif
+
+                pico_board_cmake_set_default(PICO_RP2350_A2_SUPPORTED, {a2})
+                #ifndef PICO_RP2350_A2_SUPPORTED
+                #define PICO_RP2350_A2_SUPPORTED {"1" if a2 else "0"}
+                #endif
+
+                #endif"""
+        with open(Path(self.build_folder).joinpath(f"{pico_board}.h"), "w") as f:
+            f.write(file)
