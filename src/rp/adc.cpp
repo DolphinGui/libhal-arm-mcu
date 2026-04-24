@@ -9,6 +9,7 @@
 #include <hardware/platform_defs.h>
 
 #include <libhal-util/bit.hpp>
+#include <libhal-util/math.hpp>
 #include <libhal/error.hpp>
 #include <libhal/units.hpp>
 
@@ -18,7 +19,8 @@ inline namespace v4 {
 adc::adc(u8 pin)
   : m_pin(pin)
 {
-  if (pin < ADC_BASE_PIN || pin >= ADC_BASE_PIN + NUM_ADC_CHANNELS - 1) {
+  constexpr auto last_pin = ADC_BASE_PIN + NUM_ADC_CHANNELS;
+  if (not(ADC_BASE_PIN <= pin && pin < last_pin)) {
     hal::safe_throw(
       hal::argument_out_of_domain(reinterpret_cast<void*>(pin)));  // NOLINT
   }
@@ -34,8 +36,11 @@ adc::~adc()
 float adc::driver_read()
 {
   adc_select_input(m_pin - ADC_BASE_PIN);
-  u16 result = adc_read();
-  // weirdly enough the sdk doesn't provide a function to read the error bits
+  u16 const result = adc_read();
+  // See table 1120 in RP2350 datasheet
+  // / table 568 in RPP2040 datasheet for ADC ERR bit:
+  // "The most recent ADC conversion encountered an error; result is
+  // undefined or noisy"
   if (adc_hw->cs & ADC_CS_ERR_BITS) {
     hal::safe_throw(hal::io_error(this));
   }
@@ -70,10 +75,7 @@ u16 adc16::driver_read()
   if (adc_hw->cs & ADC_CS_ERR_BITS) {
     hal::safe_throw(hal::io_error(this));
   }
-  // TODO: Use hal::upscale to actually make this 16 bit
-  // for some reason the docs reference a function that
-  // doesn't exist yet
-  return result;
+  return hal::upscale<u16, 12>(result);
 }
 
 }  // namespace v5
@@ -108,8 +110,9 @@ adc16_pack::adc16_pack(u8 mask)
 
 void adc16_pack::read_many_now(std::span<u16> s)
 {
-  if (s.size() < m_read_size)
+  if (s.size() < m_read_size) {
     safe_throw(hal::io_error(this));
+  }
   for (u8 i = 0; i < m_read_size; ++i) {
     s[i] = adc_read();
   }

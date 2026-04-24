@@ -55,8 +55,8 @@ void i2c::driver_transaction(hal::byte addr,
                              std::span<hal::byte> in,
                              hal::function_ref<hal::timeout_function> timeout)
 {
-  bool is_read = in.size() != 0;
-  int write_result = i2c_write_timeout_us(
+  bool const is_read = in.size() != 0;
+  int const write_result = i2c_write_timeout_us(
     inst(m_chan, this), addr, out.data(), out.size_bytes(), is_read, 5000);
   if (write_result == PICO_ERROR_GENERIC) {
     safe_throw(no_such_device(addr, this));
@@ -65,7 +65,7 @@ void i2c::driver_transaction(hal::byte addr,
     safe_throw(timed_out(this));
   }
   if (is_read) {
-    int read_result = i2c_read_timeout_us(
+    int const read_result = i2c_read_timeout_us(
       inst(m_chan, this), addr, in.data(), in.size_bytes(), false, 5000);
     if (read_result == PICO_ERROR_GENERIC) {
       safe_throw(no_such_device(addr, this));

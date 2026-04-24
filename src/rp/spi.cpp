@@ -23,7 +23,7 @@ auto get_bus(hal::u8 busnum)
 namespace hal::rp {
 
 inline namespace v4 {
-// TODO shuddup clang-tidy I'll fix it later
+// This constructor is private and therefore does not represent a user hazard
 spi::spi(u8 bus, u8 tx, u8 rx, u8 sck, spi::settings const& s)  // NOLINT
   : m_bus(bus)
   , m_tx(tx)
@@ -152,8 +152,9 @@ void spi_channel::driver_chip_select(bool sel)
   // the CS deasserting early. We wait explicitly, so that won't be necessary
   using namespace std::chrono_literals;
   if (sel) {
-    if (m_lock)
+    if (m_lock) {
       m_lock->lock();
+    }
     gpio_put(m_cs, false);
   } else if (!sel) {
     // Arm Primecell Synchronous Serial Port :tm: unsets the busy bit early,

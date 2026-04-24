@@ -14,16 +14,15 @@ or in an interrupt. Not that you'd do that anyways.
 struct interrupt_pin final : public hal::interrupt_pin
 {
   interrupt_pin(pin_param auto pin,
-                hal::callback<handler> callback,
                 settings const& options = {})
-    : interrupt_pin(pin(), callback, options)
+    : interrupt_pin(pin(),  options)
   {
   }
   interrupt_pin(interrupt_pin&&) = delete;
   ~interrupt_pin() override;
 
 private:
-  interrupt_pin(u8 pin, hal::callback<handler>, settings const&);
+  interrupt_pin(u8 pin, settings const&);
   void driver_configure(settings const&) override;
   void driver_on_trigger(hal::callback<handler>) override;
   u8 m_pin;

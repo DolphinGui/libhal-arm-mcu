@@ -1,9 +1,10 @@
-#include "libhal-arm-mcu/rp/time.hpp"
 #include <libhal/units.hpp>
 
 #include <hardware/platform_defs.h>
 #include <hardware/timer.h>
 #include <pico/time.h>
+
+#include "libhal-arm-mcu/rp/time.hpp"
 
 namespace hal::rp::inline v4 {
 

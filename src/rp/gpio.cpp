@@ -13,6 +13,7 @@
 #include <libhal/interrupt_pin.hpp>
 #include <libhal/units.hpp>
 #include <optional>
+#include <pico.h>
 #include <pico/sync.h>
 #include <pico/time.h>
 #include <utility>
@@ -63,11 +64,13 @@ struct interrupt_manager
 
   static lock get()
   {
-    if (!global) {
-      global = new interrupt_manager();
+    // GPIO callbacks are core-specific
+    auto& manager = global[get_core_num()];
+    if (!manager) {
+      manager = new interrupt_manager();
       gpio_set_irq_callback(&irq);
     }
-    return { global };
+    return { manager };
   }
 
   void insert(hal::u8 pin, interrupt handler)
@@ -117,22 +120,15 @@ struct interrupt_manager
   }
 
 private:
-  // yes I could save 8 * 48 bytes by doing union stuff instead of
-  // std::optional no I'm too lazy to do that
   std::array<std::optional<interrupt>, hal::rp::internal::pin_max> m_interrupts;
   interrupt_manager() = default;
   ~interrupt_manager() = default;
-  // todo check if this should be thread_local
-  static inline interrupt_manager* global = nullptr;
+  static inline std::array<interrupt_manager*, 2> global = {};
 };
 
 }  // namespace
 
 namespace hal::rp::inline v4 {
-void sleep_ms(uint32_t ms)
-{
-  ::sleep_ms(ms);
-}
 
 input_pin::input_pin(u8 pin, settings const& options)
   : m_pin(pin)
@@ -227,9 +223,7 @@ bool output_pin::driver_level()
   return gpio_get(m_pin);
 }
 
-interrupt_pin::interrupt_pin(u8 pin,
-                             hal::callback<handler> callback,
-                             settings const& options)
+interrupt_pin::interrupt_pin(u8 pin, settings const& options)
   : m_pin(pin)
 {
   gpio_init(pin);
@@ -237,8 +231,7 @@ interrupt_pin::interrupt_pin(u8 pin,
   gpio_set_function(pin, gpio_function_t::GPIO_FUNC_SIO);
   {
     auto g = interrupt_manager::get();
-    g->insert(m_pin,
-              { .edge = options.trigger, .callback = std::move(callback) });
+    g->insert(m_pin, { .edge = options.trigger, .callback = {} });
     // drop the lock
   }
   driver_configure(options);

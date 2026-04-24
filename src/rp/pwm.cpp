@@ -32,7 +32,7 @@ void pwm_pin::driver_duty_cycle(float duty)
 {
   uint channel = pwm_gpio_to_channel(m_pin);
   uint slice = pwm_gpio_to_slice_num(m_pin);
-  if (duty == 0) {
+  if (duty == 0.0f) {
     pwm_set_chan_level(slice, channel, 0);
     return;
   }

@@ -5,7 +5,7 @@
 
 namespace hal::rp::inline v4 {
 
-// This has to be the least interesting clock ever
+// Uses the built-in 1 MHz timer
 struct clock final : public hal::steady_clock
 {
   clock() = default;
@@ -17,7 +17,7 @@ struct clock final : public hal::steady_clock
 // returns configured clock speed for use with dwt_counter
 hertz core_clock();
 
-using microseconds = std::chrono::duration<u32, std::micro>;
+using microseconds = std::chrono::duration<u64, std::micro>;
 
 void sleep(std::chrono::duration<u64, std::micro> time) noexcept;
 
