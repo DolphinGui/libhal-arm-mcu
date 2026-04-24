@@ -56,6 +56,8 @@ class libhal_arm_mcu_conan(ConanFile):
         "lpc4088",
         "stm32f1",
         "stm32f103",
+        "rp2040",
+        "rp2350",
     )
     settings = "compiler", "build_type", "os", "arch"
 
@@ -232,11 +234,11 @@ class libhal_arm_mcu_conan(ConanFile):
         PLATFORM = str(self.options.platform)
         self.buildenv_info.define("LIBHAL_PLATFORM", PLATFORM)
         self.buildenv_info.define("LIBHAL_PLATFORM_LIBRARY", "arm-mcu")
-        self.buildenv_info.define(
-            "PICO_BOARD_HEADER_DIRS",
-            str(Path(self.package_folder, "include", "picosdk-board-defs")),
-        )
         if str(self.options.platform).startswith("rp2"):
+            self.buildenv_info.define(
+                "PICO_BOARD_HEADER_DIRS",
+                str(Path(self.package_folder, "include", "picosdk-board-defs")),
+            )
             defines = []
             if self.options.variant:
                 defines.append(
