@@ -1,22 +1,24 @@
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <utility>
+
+#include <libhal/error.hpp>
+#include <libhal/functional.hpp>
+#include <libhal/interrupt_pin.hpp>
+#include <libhal/units.hpp>
+
+#include <hardware/gpio.h>
+#include <hardware/sync.h>
+#include <pico.h>
+#include <pico/sync.h>
+#include <pico/time.h>
+
 #include "libhal-arm-mcu/rp/input_pin.hpp"
 #include "libhal-arm-mcu/rp/interrupt_pin.hpp"
 #include "libhal-arm-mcu/rp/output_pin.hpp"
 #include "libhal-arm-mcu/rp/rp.hpp"
-#include "libhal/error.hpp"
-
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <hardware/gpio.h>
-#include <hardware/sync.h>
-#include <libhal/functional.hpp>
-#include <libhal/interrupt_pin.hpp>
-#include <libhal/units.hpp>
-#include <optional>
-#include <pico.h>
-#include <pico/sync.h>
-#include <pico/time.h>
-#include <utility>
 
 namespace {
 struct interrupt_manager

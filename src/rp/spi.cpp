@@ -1,11 +1,13 @@
-#include "libhal-arm-mcu/rp/spi.hpp"
-
 #include <algorithm>
-#include <hardware/gpio.h>
-#include <hardware/spi.h>
+
 #include <libhal-util/steady_clock.hpp>
 #include <libhal/error.hpp>
+
+#include <hardware/gpio.h>
+#include <hardware/spi.h>
 #include <pico/time.h>
+
+#include "libhal-arm-mcu/rp/spi.hpp"
 
 namespace {
 auto get_bus(hal::u8 busnum)

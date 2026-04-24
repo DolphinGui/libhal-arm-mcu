@@ -1,10 +1,11 @@
-#include "libhal-arm-mcu/rp/i2c.hpp"
+#include <libhal/error.hpp>
+#include <libhal/units.hpp>
 
 #include <hardware/gpio.h>
 #include <hardware/i2c.h>
-#include <libhal/error.hpp>
-#include <libhal/units.hpp>
 #include <pico/error.h>
+
+#include "libhal-arm-mcu/rp/i2c.hpp"
 
 // pico macros interfere with ours
 #undef i2c0

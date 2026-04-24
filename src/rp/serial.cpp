@@ -1,13 +1,14 @@
-#include "libhal-arm-mcu/rp/serial.hpp"
+#include <libhal/error.hpp>
+#include <libhal/units.hpp>
 
 #include <hardware/gpio.h>
 #include <hardware/structs/io_bank0.h>
 #include <hardware/uart.h>
-#include <libhal/error.hpp>
-#include <libhal/units.hpp>
 #include <pico/error.h>
 #include <pico/stdio.h>
 #include <pico/time.h>
+
+#include "libhal-arm-mcu/rp/serial.hpp"
 
 namespace {
 auto get_uart(hal::u8 bus)

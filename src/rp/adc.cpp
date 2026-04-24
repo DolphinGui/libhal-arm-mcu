@@ -1,6 +1,7 @@
-#include "libhal-arm-mcu/rp/adc.hpp"
-#include "libhal-arm-mcu/rp/rp.hpp"
-#include "libhal-arm-mcu/rp/time.hpp"
+#include <libhal-util/bit.hpp>
+#include <libhal-util/math.hpp>
+#include <libhal/error.hpp>
+#include <libhal/units.hpp>
 
 #include <hardware/adc.h>
 #include <hardware/address_mapped.h>
@@ -8,10 +9,9 @@
 #include <hardware/gpio.h>
 #include <hardware/platform_defs.h>
 
-#include <libhal-util/bit.hpp>
-#include <libhal-util/math.hpp>
-#include <libhal/error.hpp>
-#include <libhal/units.hpp>
+#include "libhal-arm-mcu/rp/adc.hpp"
+#include "libhal-arm-mcu/rp/rp.hpp"
+#include "libhal-arm-mcu/rp/time.hpp"
 
 namespace hal::rp {
 

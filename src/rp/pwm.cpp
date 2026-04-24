@@ -1,11 +1,13 @@
-#include "libhal-arm-mcu/rp/pwm.hpp"
+#include <limits>
 
-#include <hardware/gpio.h>
-#include <hardware/pwm.h>
 #include <libhal-util/bit.hpp>
 #include <libhal/error.hpp>
 #include <libhal/units.hpp>
-#include <limits>
+
+#include <hardware/gpio.h>
+#include <hardware/pwm.h>
+
+#include "libhal-arm-mcu/rp/pwm.hpp"
 
 /*
 TODO: Specify SYS_CLK_HZ in a board header so that pico actually knows what
