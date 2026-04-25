@@ -117,15 +117,26 @@ void uart::driver_configure(settings const& options)
 
 serial::write_t uart::driver_write(std::span<byte const> in)
 {
-  uart_write_blocking(get_uart(m_bus), in.data(), in.size_bytes());
-  // always writes everything
-  return { in };
+  auto uart = get_uart(m_bus);
+  size_t i = 0;
+  for (; i < in.size_bytes(); ++i) {
+    if (!uart_is_writable(uart))
+      break;
+    uart_get_hw(uart)->dr = in[i];
+  }
+  return { in.subspan(0, i) };
 }
 
 serial::read_t uart::driver_read(std::span<byte> out)
 {
-  uart_read_blocking(get_uart(m_bus), out.data(), out.size_bytes());
-  return { .data = out,
+  auto uart = get_uart(m_bus);
+  size_t i = 0;
+  for (; i < out.size_bytes(); ++i) {
+    while (!uart_is_readable(uart))
+      break;
+    out[i] = (uint8_t)uart_get_hw(uart)->dr;
+  }
+  return { .data = out.subspan(0, i),
            .available = uart_is_readable(get_uart(m_bus)),
            .capacity = 32 };
 }
