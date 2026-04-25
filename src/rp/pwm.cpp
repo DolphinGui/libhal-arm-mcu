@@ -153,9 +153,9 @@ void pwm_pin::driver_duty_cycle(u16 duty)
     return;
   }
 
-  float percentage = float(duty) / std::numeric_limits<u16>::max();
-  u16 top = pwm_hw->slice[m_slice].top;
-  pwm_set_chan_level(m_slice, channel, u16(float(top) * percentage));
+  u32 top = pwm_hw->slice[m_slice].top * duty;
+  auto final_top = static_cast<u16>(top / std::numeric_limits<u16>::max());
+  pwm_set_chan_level(m_slice, channel, final_top);
   if (m_autostart) {
     pwm_set_enabled(m_slice, true);
   }
