@@ -128,7 +128,7 @@ struct pwm_slice final : pwm_slice_runtime
   {
     using enum internal::processor_type;
     static_assert(internal::type == rp2040 || internal::type == rp2350,
-                  "Update PWM channels for new RP!");
+                  "Unknown RP type!");
     static_assert(ch() < 8 || internal::pin_max != 30,
                   "PWM channel is invalid!");
     static_assert(ch() < 11 || internal::pin_max != 48,
