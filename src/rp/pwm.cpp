@@ -9,12 +9,6 @@
 
 #include "libhal-arm-mcu/rp/pwm.hpp"
 
-/*
-TODO: Specify SYS_CLK_HZ in a board header so that pico actually knows what
-frequency it should run at
-
-*/
-
 namespace hal::rp {
 inline namespace v4 {
 pwm_pin::pwm_pin(hal::unsafe, u8 pin)

@@ -135,7 +135,10 @@ private:
   void driver_configure(settings const&) override;
   u32 driver_clock_rate() override;
   void driver_chip_select(bool p_select) override;
-
+  /**
+   * @brief Transfers bytes with device.
+   * Currently only supports 8-bit transactions, see TODO(#1)
+   */
   void driver_transfer(std::span<byte const> out,
                        std::span<byte> in,
                        byte) override;

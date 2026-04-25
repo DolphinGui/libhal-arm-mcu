@@ -102,7 +102,11 @@ struct adc16_pack
   adc16_pack(adc16_pack&&) = delete;
 
   void read_many_now(std::span<u16>);
-  // Uses up 1 DMA channel
+  /**
+   * Allows many ADC reads asynchronously via DMA.
+   * Currently broken, requires further investigation.
+   * TODO(#3)
+   */
   read_session async();
 
 private:
