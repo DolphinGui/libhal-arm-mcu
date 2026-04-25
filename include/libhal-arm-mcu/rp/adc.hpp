@@ -9,8 +9,22 @@
 namespace hal::rp {
 
 inline namespace v4 {
+
+/**
+ * @brief A class that represents a single ADC pin
+ *
+ * The RP-series ADC is muxed amongst the last few pins,
+ * and the adc class implementation simply switches the
+ * mux whenever an ADC measurement needs to be done.
+ *
+ */
 struct adc final : public hal::adc
 {
+  /**
+   * @brief Constructs an ADC pin from a pin constant
+   * Defers to the runtime constructor to reduce code bloat,
+   * only really doing compiletime error checking.
+   */
   adc(pin_param auto pin)
     : adc(pin())
   {
@@ -23,16 +37,25 @@ struct adc final : public hal::adc
 
 private:
   adc(u8 pin);
-  /*Because the rp chips only have one ADC that's muxed
-  across different pins, we just initialize and mux the ADC
-  every time we want to read. */
+  /**
+   * @brief Reads the ADC and returns the value as a ratio.
+   * Returns the ADC read, normalized to a range of [0.0, 1.0].
+   * May spurously throw hal::io_error if the ADC encounters an
+   * error for some reason. See table 1120 in RP2350 datasheet
+   * and table 568 in RPP2040 datasheet for ADC ERR bit.
+   */
   float driver_read() override;
   u8 m_pin;
 };
 }  // namespace v4
 
 namespace v5 {
-// The ADC is 12 bit
+/**
+ * @brief A class that represents a single ADC pin
+ *
+ * The RP-series ADC is 12-bit, but we use hal::upscale
+ * to increase the output to 16-bit.
+ */
 struct adc16 final : public hal::adc16
 {
   adc16(pin_param auto pin)
@@ -47,15 +70,25 @@ struct adc16 final : public hal::adc16
 
 private:
   adc16(u8 gpio);
-  /*Because the rp chips only have one ADC that's muxed
-  across different pins, we just initialize and mux the ADC
-  every time we want to read. */
+  /**
+   * @brief Reads the ADC and returns the value as a 16 bit integer.
+   * Returns the ADC read, normalized to a range of [0, 2^16-1].
+   * May spurously throw hal::io_error if the ADC encounters an
+   * error for some reason. See table 1120 in RP2350 datasheet
+   * and table 568 in RPP2040 datasheet for ADC ERR bit.
+   */
   u16 driver_read() override;
   u8 m_pin;
 };
 }  // namespace v5
 
 namespace nonstandard {
+/**
+ * @brief A class that represents a set of ADC pins
+ *
+ * Allows multiple ADC reads in one function call, reducing function
+ * call overhead.
+ */
 struct adc16_pack
 {
   struct read_session;

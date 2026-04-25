@@ -4,9 +4,13 @@
 #include <libhal/output_pin.hpp>
 
 namespace hal::rp::inline v4 {
+/**
+ * @brief A class that allows gpio output.
+ * Does light compiletime checking to prevent invalid pin values
+ * from being used.
+ */
 struct output_pin final : public hal::output_pin
 {
-
   output_pin(pin_param auto pin, settings const& options = {})
     : output_pin(pin(), options)
   {

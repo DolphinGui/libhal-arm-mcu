@@ -6,9 +6,11 @@
 #include <libhal/units.hpp>
 
 namespace hal::rp::inline v4 {
-/*
-RP2350 supports a baud rate of up to 1 MHz
-*/
+/**
+ * @brief A class that wraps i2c. Supports up to 1 MHz clock
+ * Compiletime checking is done to prevent invalid pins from being
+ * assigned.
+ */
 struct i2c final : public hal::i2c
 {
   i2c(pin_param auto p_sda,

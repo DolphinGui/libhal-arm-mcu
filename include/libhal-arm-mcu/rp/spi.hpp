@@ -13,7 +13,12 @@ constexpr u8 bus_from_tx_pin(u8 tx)
 }
 
 inline namespace v4 {
-// Backfill because much of libhal will stay on v4 for the time being
+/**
+ * @brief An SPI peripheral. Does not manage CS.
+ * Uses compiletime checking for pin values, see GPIO
+ * Functions table in relevant processor datasheet for
+ * correct pin assignments.
+ */
 struct spi final : public hal::spi
 {
   spi(pin_param auto copi,
@@ -45,6 +50,12 @@ struct spi_channel;
 template<typename Lock = void>
 struct spi_bus;
 template<>
+/**
+ * @brief An SPI peripheral. Use via acquiring devices.
+ * Uses compiletime checking for pin values, see GPIO
+ * Functions table in relevant processor datasheet for
+ * correct pin assignments.
+ */
 struct spi_bus<void>
 {
   spi_bus(bus_param auto bus,
@@ -61,9 +72,12 @@ struct spi_bus<void>
   }
   ~spi_bus();
 
-  /* Acquires a device assciated with a certain pin. Due to usage of software
-   * CS, a steady clock is necessary to wait the prerequesite time since SPI
-   * Peripheral unsets itself a little early */
+  /**
+   * @brief Acquires a device assciated with a certain pin.
+   * Due to usage of software CS, a steady clock is necessary
+   * to wait the prerequesite time since SPI peripheral unsets
+   * itself a little early.
+   */
   spi_channel acquire_device(pin_param auto pin,
                              hal::steady_clock&,
                              hal::v5::spi_channel::settings const& settings);
@@ -77,6 +91,11 @@ protected:
   u8 m_bus, m_tx, m_rx, m_sck;
 };
 
+/**
+ * @brief An SPI peripheral with runtime lock support.
+ * Pass any parameters at the end for constructing the lock.
+ * The lock inside of spi_bus will be used for all acquired devices.
+ */
 template<hal::lockable Lock>
 struct spi_bus<Lock> : spi_bus<void>
 {
@@ -98,10 +117,10 @@ struct spi_bus<Lock> : spi_bus<void>
   Lock m_lock;
 };
 
-/*
-RP chips suppport 16 bit transfers. It may be worthwhile to add an option
-to transfer 16 bits as a time. TODO fix to add spi channel manager
-*/
+/**
+ * @brief A device on the SPI data bus, muxed with a CS pin.
+ * May lock at runtime if spi_bus was constructed with a lock.
+ */
 struct spi_channel final : public hal::spi_channel
 {
   friend spi_bus<void>;

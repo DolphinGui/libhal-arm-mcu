@@ -5,12 +5,13 @@
 #include <libhal/units.hpp>
 
 namespace hal::rp::inline v4 {
-/*
-Interrupt pin uses hidden globals to implement interrupts because
-the interrupt callback function doesn't quite match the hal::handler type.
-Because of that, it is unsafe to construct multiple interrupts across cores
-or in an interrupt. Not that you'd do that anyways.
-*/
+/**
+ * @brief A class that enables registering interrupts for gpio changes.
+ * The RP2350 has only 1 interrupt for all GPIO changes, per core, so the
+ * interrupt pin class must create a core-local global to register all
+ * all interrupts. This becomes a 1.5kB global variable allocated via malloc.
+ * ISRs registered must be reentrant.
+ */
 struct interrupt_pin final : public hal::interrupt_pin
 {
   interrupt_pin(pin_param auto pin, settings const& options = {})

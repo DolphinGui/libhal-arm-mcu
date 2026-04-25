@@ -4,9 +4,11 @@
 #include <libhal/input_pin.hpp>
 
 namespace hal::rp::inline v4 {
+/**
+ * @brief A class that allows reading from a GPIO pin.
+ */
 struct input_pin final : public hal::input_pin
 {
-
   input_pin(pin_param auto pin, settings const& s = {})
     : input_pin(pin(), s)
   {

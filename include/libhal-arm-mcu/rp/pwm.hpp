@@ -9,16 +9,19 @@
 namespace hal::rp {
 
 inline namespace v4 {
-// this a bad backport to v4, since the pwm interface cannot
-// guarantee two pwm's won't interfere
+/**
+ * @brief A PWM class. Do not use if possible.
+ */
 struct pwm_pin final : hal::pwm
 {
-  // By constructing this class you forfeit all claims to any
-  // warranty, implied or otherwise. You acknowledge you will
-  // read the relevant datasheet (RP2350 or RP2040 datasheet)
-  // and verify they are on different PWM slices. You waive
-  // any right to complain about two different PWM pins interfering
-  // with each other because they are on the same slice.
+  /**
+   *  By constructing this class you forfeit all claims to any
+   *  warranty, implied or otherwise. You acknowledge you will
+   *  read the relevant datasheet (RP2350 or RP2040 datasheet)
+   *  and verify they are on different PWM slices. You waive
+   *  any right to complain about two different PWM pins interfering
+   *  with each other because they are on the same slice.
+   */
   pwm_pin(hal::unsafe, u8 pin);
   pwm_pin(pwm_pin&&) = delete;
   ~pwm_pin() override;
@@ -32,6 +35,9 @@ private:
 }  // namespace v4
 
 namespace v5 {
+/**
+ * @brief Represents the A/B channels on each PWM slice
+ */
 enum struct pwm_ch : u8
 {
   a,
@@ -40,16 +46,16 @@ enum struct pwm_ch : u8
 
 struct pwm_pin;
 
-// See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=88165
-
 struct pwm_pin_configuration
 {
   u16 duty_cycle = 0;
   bool autostart = true;
 };
 
-/* This is the base runtime class for PWM. It cannot
-be instantiated normally */
+/**
+ *  This is the base runtime class for a PWM slice.
+ *  Construct pwm_slice instead.
+ */
 struct pwm_slice_runtime : hal::pwm_group_manager
 {
 
@@ -87,17 +93,13 @@ struct pwm_pin final : hal::pwm16_channel
 
   friend pwm_slice_runtime;
 
-  // not intended to be normally used. Use pwm_slice::get_pin() whenever
-  // possible
-
 private:
   pwm_pin(u8 pin, pwm_pin_configuration const& c, hal::unsafe);
   u32 driver_frequency() override;
 
-  /*
-  When set to a 0% duty cycle, it disables the timer
-  completely.
-  */
+  /**
+   * When set to a 0% duty cycle, it disables the timer completely.
+   */
   void driver_duty_cycle(u16 p_duty_cycle) override;
 
   u8 m_pin;
@@ -105,13 +107,17 @@ private:
   bool m_autostart;
 };
 
-/* This globally starts all of the timers at once, which may be useful for
-aligning their phases. Set argument to false to stop all of them at once */
+/**
+ * This globally starts all of the timers at once, which may be useful for
+ * aligning their phases. Set argument to false to stop all of them at once */
 void enable_all_pwm(bool start = true);
 
-/* This is the actual pwm channel type that's meant to be used. It is also
- * necessary to get the pins since pins cannot be constructed on their own.*/
-template<u64 chan>
+/**
+ * PWM slices are fine-grained PWM peripherals with 2 comparators each, A
+ * and B. The PWM slice manages the clock divider and counter, while each
+ * pin compares the register to a value to determine output.
+ */
+template<u64 channel>
 struct pwm_slice final : pwm_slice_runtime
 {
 
@@ -130,9 +136,13 @@ struct pwm_slice final : pwm_slice_runtime
     static_assert(ch() < max_slices(), "Invalid PWM slice!");
   }
 
+  /**
+   * @brief Gets pwm pin from pin parameter.
+   * See relevant processor datasheet for correct pin-to-slice mapping.
+   */
   pwm_pin get_pin(pin_param auto pin, pwm_pin_configuration const& config = {})
   {
-    static_assert(get_slice_number(pin) == chan, "Slice pin is incorrect!");
+    static_assert(get_slice_number(pin) == channel, "Slice pin is incorrect!");
     return get_pin_raw(pin(), config);
   }
 
