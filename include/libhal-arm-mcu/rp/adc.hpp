@@ -14,9 +14,8 @@ struct adc final : public hal::adc
   adc(pin_param auto pin)
     : adc(pin())
   {
-    static_assert(internal::pin_max != 30 || (pin() >= 26 && pin() < 30),
-                  "ADC pin is invalid!");
-    static_assert(internal::pin_max != 48 || (pin() >= 40 && pin() < 48),
+    constexpr int adc_base = internal::pin_max == 30 ? 26 : 40;
+    static_assert(adc_base <= pin() && pin() < internal::pin_max,
                   "ADC pin is invalid!");
   }
   adc(adc&&) = delete;
