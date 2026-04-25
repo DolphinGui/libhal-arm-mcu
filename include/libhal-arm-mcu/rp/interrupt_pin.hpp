@@ -13,9 +13,8 @@ or in an interrupt. Not that you'd do that anyways.
 */
 struct interrupt_pin final : public hal::interrupt_pin
 {
-  interrupt_pin(pin_param auto pin,
-                settings const& options = {})
-    : interrupt_pin(pin(),  options)
+  interrupt_pin(pin_param auto pin, settings const& options = {})
+    : interrupt_pin(pin(), options)
   {
   }
   interrupt_pin(interrupt_pin&&) = delete;

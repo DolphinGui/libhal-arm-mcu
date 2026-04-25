@@ -18,10 +18,14 @@ struct i2c final : public hal::i2c
     : i2c(p_sda(), p_scl(), p_bus(), p_settings)
   {
     static_assert(p_bus() == 0 || p_bus() == 1, "Invalid bus selected!");
-    static_assert(p_sda() % 4 == 0 || p_bus() != 0, "SDA pin for I2C0 is invalid!");
-    static_assert(p_scl() % 4 == 1 || p_bus() != 0, "SCL pin for I2C0 is invalid!");
-    static_assert(p_sda() % 4 == 2 || p_bus() != 1, "SDA pin for I2C1 is invalid!");
-    static_assert(p_scl() % 4 == 3 || p_bus() != 1, "SCL pin for I2C1 is invalid!");
+    static_assert(p_sda() % 4 == 0 || p_bus() != 0,
+                  "SDA pin for I2C0 is invalid!");
+    static_assert(p_scl() % 4 == 1 || p_bus() != 0,
+                  "SCL pin for I2C0 is invalid!");
+    static_assert(p_sda() % 4 == 2 || p_bus() != 1,
+                  "SDA pin for I2C1 is invalid!");
+    static_assert(p_scl() % 4 == 3 || p_bus() != 1,
+                  "SCL pin for I2C1 is invalid!");
   }
   i2c(i2c&&) = delete;
   ~i2c() override;
