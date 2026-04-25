@@ -89,9 +89,9 @@ struct pwm_pin final : hal::pwm16_channel
 
   // not intended to be normally used. Use pwm_slice::get_pin() whenever
   // possible
-  pwm_pin(u8 pin, pwm_pin_configuration const& c, hal::unsafe);
 
 private:
+  pwm_pin(u8 pin, pwm_pin_configuration const& c, hal::unsafe);
   u32 driver_frequency() override;
 
   /*
