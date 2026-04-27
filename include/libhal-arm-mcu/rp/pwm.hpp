@@ -154,7 +154,9 @@ struct pwm_slice final : pwm_slice_runtime
     } else if constexpr (hal::rp::internal::type == rp2350) {
       return 12;
     }
-    static_assert("Unknown RP type");
+    static_assert(hal::rp::internal::type == rp2040 or
+                    hal::rp::internal::type == rp2350,
+                  "Unknown RP type");
   }
 
   static constexpr u8 get_slice_number(pin_param auto pin)
