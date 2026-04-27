@@ -36,11 +36,11 @@ private:
   i2c(u8 p_sda, u8 p_scl, u8 p_chan, settings const&);
   void driver_configure(settings const&) override;
 
-  /*
-  This function does not correctly use the timeout function, and will
-  throw it's own timeout exceptions if a transaction takes any longer
-  than 10 ms.
-  */
+  /**
+   * This function does not correctly use the timeout function, and will
+   * throw it's own timeout exceptions if a transaction takes any longer
+   * than 10 ms.
+   */
   void driver_transaction(hal::byte p_addr,
                           std::span<hal::byte const> p_out,
                           std::span<hal::byte> p_in,
